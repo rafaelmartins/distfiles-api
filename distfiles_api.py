@@ -25,30 +25,32 @@ def upload():
 
     if 'file' not in request.files:
         abort(400)
-    if any(i not in request.form for i in ('project', 'sha512')):
+    if any(i not in request.form for i in ('project', 'version', 'sha512')):
         abort(400)
 
     match_sha512 = re_sha512.match(request.form['sha512'])
     if match_sha512 is None:
         abort(400)
 
-    f = request.files['file']
+    hash_sha512, binary_flag, filename = match_sha512.groups()
 
-    if len(f.filename) < 4:
+    if len(filename) < 4:
         abort(400)
-    if any(i in f.filename for i in '/\\'):
+    if any(i in filename for i in '/\\'):
         abort(400)
 
     # this should waste some memory, but it is ok. also, upload file size
     # should be restricted in nginx.
-    data = f.read()
+    data = request.files['file'].read()
 
-    if match_sha512.group(1) != hashlib.sha512(data).hexdigest():
+    if hash_sha512 != hashlib.sha512(data).hexdigest():
         abort(400)
 
     destdir = os.path.join(app.config['DISTFILES_BASEDIR'],
-                           request.form['project'])
-    dest = os.path.join(destdir, f.filename)
+                           request.form['project'],
+                           '%s-%s' % (request.form['project'],
+                                      request.form['version']))
+    dest = os.path.join(destdir, filename)
     dest_sha512 = '%s.sha512' % dest
 
     if not os.path.isdir(destdir):
