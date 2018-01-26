@@ -46,10 +46,9 @@ def upload():
     if hash_sha512 != hashlib.sha512(data).hexdigest():
         abort(400)
 
+    p = '%s-%s' % (request.form['project'], request.form['version'])
     destdir = os.path.join(app.config['DISTFILES_BASEDIR'],
-                           request.form['project'],
-                           '%s-%s' % (request.form['project'],
-                                      request.form['version']))
+                           request.form['project'], p)
     dest = os.path.join(destdir, filename)
     dest_sha512 = '%s.sha512' % dest
 
@@ -61,5 +60,12 @@ def upload():
 
     with open(dest, 'w') as fp:
         fp.write(data)
+
+    latest = os.path.join(app.config['DISTFILES_BASEDIR'],
+                          request.form['project'], 'LATEST')
+    if os.path.lexists(latest):
+        os.remove(latest)
+
+    os.symlink(p, latest)
 
     return 'OK\n'
