@@ -4,6 +4,7 @@ from flask import Flask, request
 import hashlib
 import os
 import re
+import tarfile
 
 app = Flask(__name__)
 
@@ -71,7 +72,7 @@ def upload():
     with open(dest_sha512, 'w') as fp:
         fp.write(request.form['sha512'])
 
-    with open(dest, 'w') as fp:
+    with open(dest, 'wb') as fp:
         fp.write(data)
 
     latest = os.path.join(app.config['DISTFILES_BASEDIR'],
@@ -80,5 +81,10 @@ def upload():
         os.remove(latest)
 
     os.symlink(p, latest)
+
+    if 'extract' in request.form and \
+       request.form['extract'].lower() in ('1', 'true'):
+        with tarfile.open(dest, 'r:*') as fp:
+            fp.extractall(destdir)
 
     return 'OK\n', 200, {'Content-Type': 'text/plain'}
