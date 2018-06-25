@@ -84,3 +84,8 @@ def upload():
             fp.extractall(destdir)
 
     return abort(200, 'OK')
+
+
+@app.route('/health')
+def health():
+    return 'OK'
