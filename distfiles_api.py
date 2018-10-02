@@ -1,31 +1,40 @@
 # coding: utf-8
 
-from flask import Flask, request
 import hashlib
 import os
 import re
 import tarfile
+import tempfile
 
-app = Flask(__name__)
+from flask import Flask, request, Blueprint, current_app
+from prettyconf import config
 
-app.config.update(
-    AUTH_TOKEN='token',
-    DISTFILES_BASEDIR=os.getcwd(),
-)
-app.config.from_envvar('DISTFILES_CONFIG', True)
-
+blueprint = Blueprint('main', __name__)
 re_sha512 = re.compile(r'([0-9a-f]{128}) (\*| )(.+)')
+CHUNK_SIZE = 8192
+
+
+def create_app():
+    app = Flask(__name__)
+
+    app.config.update(
+        AUTH_TOKENS=config('AUTH_TOKENS', config.list, default=['token']),
+        DISTFILES_BASEDIR=config('DISTFILES_BASEDIR', default=os.getcwd()),
+    )
+    app.config.from_envvar('DISTFILES_CONFIG', True)
+    app.register_blueprint(blueprint)
+    return app
 
 
 def abort(code, content):
     return content, code, {'Content-Type': 'text/plain'}
 
 
-@app.route('/', methods=['POST'])
+@blueprint.route('/', methods=['POST'])
 def upload():
     if request.authorization is None:
         return abort(401, 'NOAUTH')
-    if request.authorization.username != app.config['AUTH_TOKEN']:
+    if request.authorization.username not in current_app.config['AUTH_TOKENS']:
         return abort(401, 'BADAUTH')
 
     if 'file' not in request.files:
@@ -49,15 +58,21 @@ def upload():
     if filename != fileobj.filename:
         return abort(400, 'BADSHA512_FILENAME')
 
-    # this should waste some memory, but it is ok. also, upload file size
-    # should be already restricted by nginx.
-    data = fileobj.read()
+    temporary_file = tempfile.NamedTemporaryFile(delete=False)
+    calculated_hash = hashlib.sha512()
+    while True:
+        chunk = fileobj.read(CHUNK_SIZE)
+        if not chunk:
+            break
+        calculated_hash.update(chunk)
+        temporary_file.write(chunk)
 
-    if hash_sha512 != hashlib.sha512(data).hexdigest():
+    if hash_sha512 != calculated_hash.hexdigest():
+        os.unlink(temporary_file.name)
         return abort(400, 'BADSHA512_HASH')
 
     p = '%s-%s' % (request.form['project'], request.form['version'])
-    destdir = os.path.join(app.config['DISTFILES_BASEDIR'],
+    destdir = os.path.join(current_app.config['DISTFILES_BASEDIR'],
                            request.form['project'], p)
     dest = os.path.join(destdir, filename)
     dest_sha512 = '%s.sha512' % dest
@@ -68,24 +83,25 @@ def upload():
     with open(dest_sha512, 'w') as fp:
         fp.write(request.form['sha512'])
 
-    with open(dest, 'wb') as fp:
-        fp.write(data)
+    os.rename(temporary_file.name, dest)
 
-    latest = os.path.join(app.config['DISTFILES_BASEDIR'],
+    latest = os.path.join(current_app.config['DISTFILES_BASEDIR'],
                           request.form['project'], 'LATEST')
     if os.path.lexists(latest):
         os.remove(latest)
 
     os.symlink(p, latest)
 
-    if 'extract' in request.form and \
-       request.form['extract'].lower() in ('1', 'true'):
-        with tarfile.open(dest, 'r:*') as fp:
-            fp.extractall(destdir)
+    if request.form.get('extract', '').lower() in ('1', 'true'):
+        try:
+            with tarfile.open(dest, 'r:*') as fp:
+                fp.extractall(destdir)
+        except tarfile.ReadError:
+            return abort(400, 'BAD_TAR_FILE')
 
     return abort(200, 'OK')
 
 
-@app.route('/health')
+@blueprint.route('/health')
 def health():
     return 'OK'
