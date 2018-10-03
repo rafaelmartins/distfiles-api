@@ -61,7 +61,11 @@ def upload():
     temporary_file = tempfile.NamedTemporaryFile(delete=False)
     calculated_hash = hashlib.sha512()
     while True:
-        chunk = fileobj.read(CHUNK_SIZE)
+        try:
+            chunk = fileobj.read(CHUNK_SIZE)
+        except IOError:
+            os.unlink(temporary_file.name)
+            raise
         if not chunk:
             break
         calculated_hash.update(chunk)
