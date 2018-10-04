@@ -13,6 +13,9 @@ blueprint = Blueprint('main', __name__)
 re_sha512 = re.compile(r'([0-9a-f]{128}) (\*| )(.+)')
 CHUNK_SIZE = 8192
 
+UMASK = os.umask(0)
+os.umask(UMASK)
+
 
 def create_app():
     app = Flask(__name__)
@@ -88,6 +91,7 @@ def upload():
         fp.write(request.form['sha512'])
 
     os.rename(temporary_file.name, dest)
+    os.chmod(dest, 0o666 & ~UMASK)
 
     latest = os.path.join(current_app.config['DISTFILES_BASEDIR'],
                           request.form['project'], 'LATEST')
