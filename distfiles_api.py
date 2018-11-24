@@ -3,6 +3,7 @@
 import hashlib
 import os
 import re
+import shutil
 import tarfile
 import tempfile
 
@@ -90,7 +91,7 @@ def upload():
     with open(dest_sha512, 'w') as fp:
         fp.write(request.form['sha512'])
 
-    os.rename(temporary_file.name, dest)
+    shutil.move(temporary_file.name, dest)
     os.chmod(dest, 0o666 & ~UMASK)
 
     latest = os.path.join(current_app.config['DISTFILES_BASEDIR'],
