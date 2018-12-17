@@ -90,6 +90,12 @@ def upload():
 
     with open(dest_sha512, 'w') as fp:
         fp.write(request.form['sha512'])
+        fp.flush()
+        os.fdatasync(fp)
+
+    temporary_file.flush()
+    os.fdatasync(temporary_file)
+    temporary_file.close()
 
     shutil.move(temporary_file.name, dest)
     os.chmod(dest, 0o666 & ~UMASK)
