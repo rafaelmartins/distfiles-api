@@ -107,6 +107,14 @@ def upload():
 
     os.symlink(p, latest)
 
+    if request.form.get('release', '').lower() in ('1', 'true'):
+        latest_release = os.path.join(current_app.config['DISTFILES_BASEDIR'],
+                                      request.form['project'], 'LATEST_RELEASE')
+        if os.path.lexists(latest_release):
+            os.remove(latest_release)
+
+        os.symlink(p, latest_release)
+
     if request.form.get('extract', '').lower() in ('1', 'true'):
         try:
             with tarfile.open(dest, 'r:*') as fp:
